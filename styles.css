@@ -173,7 +173,7 @@ p{margin:0;}
   border-radius:3px;
   opacity:0;
   transition:opacity 0.15s ease;
-  z-index:5;
+  z-index:50;
 }
 .dv-search-highlight-show{opacity:1;}
 [data-dv-theme="dark"] .dv-search-highlight{background:rgba(255,214,0,0.4);}
