@@ -291,17 +291,58 @@ function dvIndexToLineCh(text, index) {
 
 // Find a match ourselves (plain substring, case-insensitive) starting
 // from a given character index, wrapping to the top if nothing is found.
+// Collapse all runs of whitespace (including newlines) to a single space,
+// and return both the normalized string AND a map from each character in
+// the normalized string back to its real offset in the original text.
+// This lets a multi-line paste into the (single-line) search input — where
+// the browser strips/collapses newlines — still match code that has real
+// line breaks, while highlighting still lands on the true position.
+function dvNormalizeWithMap(str) {
+  let normalized = '';
+  const map = [];
+  let inWhitespace = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (/\s/.test(ch)) {
+      if (!inWhitespace) {
+        normalized += ' ';
+        map.push(i);
+        inWhitespace = true;
+      }
+    } else {
+      normalized += ch;
+      map.push(i);
+      inWhitespace = false;
+    }
+  }
+  return { normalized: normalized, map: map };
+}
+
 function dvFindMatch(text, term, fromIndex) {
-  const hay = text.toLowerCase();
-  const needle = term.toLowerCase();
-  let idx = hay.indexOf(needle, fromIndex);
+  const { normalized: hayNorm, map } = dvNormalizeWithMap(text);
+  const { normalized: needleNorm } = dvNormalizeWithMap(term);
+  if (!needleNorm) return null;
+
+  const hay = hayNorm.toLowerCase();
+  const needle = needleNorm.toLowerCase();
+
+  // fromIndex was a real-text offset; convert it to a normalized offset.
+  let normFromIndex = 0;
+  while (normFromIndex < map.length && map[normFromIndex] < fromIndex) normFromIndex++;
+
+  let normIdx = hay.indexOf(needle, normFromIndex);
   let wrapped = false;
-  if (idx === -1) {
-    idx = hay.indexOf(needle, 0);
+  if (normIdx === -1) {
+    normIdx = hay.indexOf(needle, 0);
     wrapped = true;
   }
-  if (idx === -1) return null;
-  return { index: idx, length: term.length, wrapped: wrapped };
+  if (normIdx === -1) return null;
+
+  const realStart = map[normIdx];
+  const realEndNormIdx = normIdx + needle.length - 1;
+  const realEnd = map[Math.min(realEndNormIdx, map.length - 1)] + 1;
+
+  return { index: realStart, length: realEnd - realStart, wrapped: wrapped };
 }
 
 function dvHighlightAndCenter(cm, fromPos, toPos) {
