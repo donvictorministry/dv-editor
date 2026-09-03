@@ -40,7 +40,7 @@ button{font-family:inherit;border:none;background:none;color:inherit;cursor:poin
 ul{list-style:none;margin:0;padding:0;}
 p{margin:0;}
 
-.dv-icon{width:24px;height:24px;display:block;}
+.dv-icon{width:25.2px;height:25.2px;display:block;}
 .dv-icon-btn{
   width:44px;height:44px;min-width:44px;min-height:44px;
   display:flex;align-items:center;justify-content:center;
@@ -136,7 +136,7 @@ p{margin:0;}
   flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2px;padding:6px 12px;min-width:56px;border-radius:10px;color:var(--dv-text-dim);
 }
-.dv-tool-btn .dv-icon{width:21px;height:21px;}
+.dv-tool-btn .dv-icon{width:22.05px;height:22.05px;}
 .dv-tool-btn span{font-size:0.62rem;font-weight:500;}
 .dv-tool-btn:active{background:rgba(var(--dv-accent-rgb),0.14);color:var(--dv-accent);}
 .dv-tool-toggle.dv-tool-active{color:var(--dv-accent);background:rgba(var(--dv-accent-rgb),0.14);}
