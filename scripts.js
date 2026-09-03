@@ -245,38 +245,117 @@ function dvOpenSearchModal() {
   setTimeout(() => input.focus(), 100);
 }
 
-function dvCenterMatchInView(cm, from, to) {
-  cm.setSelection(from, to);
-  // Vertical-only centering. Horizontal scroll position is left untouched
-  // so the start of each line always stays visible.
-  requestAnimationFrame(() => {
-    const startCoords = cm.charCoords(from, 'local');
-    const endCoords = cm.charCoords(to, 'local');
-    const editorEl = cm.getScrollerElement();
-    const matchCenterY = (startCoords.top + endCoords.bottom) / 2;
+/* ===================== DV INDEPENDENT SEARCH HIGHLIGHT ===================== */
+// Built independently of CodeMirror's own selection/focus machinery.
+// We find the match ourselves in the raw text, convert that to a line/ch
+// position, read its pixel coordinates (a neutral coordinate reader, not
+// a behavior owner), then draw our OWN highlight box and scroll the
+// scroller directly. None of this depends on the editor having focus.
 
-    editorEl.scrollTop = Math.max(0, matchCenterY - editorEl.clientHeight / 2);
-  });
+let dvSearchHighlightEl = null;
+
+function dvGetOrCreateHighlightEl(cm) {
+  const wrapper = cm.getWrapperElement();
+  let el = wrapper.querySelector('.dv-search-highlight');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'dv-search-highlight';
+    wrapper.appendChild(el);
+  }
+  return el;
+}
+
+function dvClearSearchHighlight() {
+  if (dvSearchHighlightEl) {
+    dvSearchHighlightEl.remove();
+    dvSearchHighlightEl = null;
+  }
+}
+
+// Convert a flat character index in the full text back into {line, ch}.
+function dvIndexToLineCh(text, index) {
+  const before = text.slice(0, index);
+  const lines = before.split('\n');
+  return { line: lines.length - 1, ch: lines[lines.length - 1].length };
+}
+
+// Find a match ourselves (plain substring, case-insensitive) starting
+// from a given character index, wrapping to the top if nothing is found.
+function dvFindMatch(text, term, fromIndex) {
+  const hay = text.toLowerCase();
+  const needle = term.toLowerCase();
+  let idx = hay.indexOf(needle, fromIndex);
+  let wrapped = false;
+  if (idx === -1) {
+    idx = hay.indexOf(needle, 0);
+    wrapped = true;
+  }
+  if (idx === -1) return null;
+  return { index: idx, length: term.length, wrapped: wrapped };
+}
+
+function dvHighlightAndCenter(cm, fromPos, toPos) {
+  cm.refresh();
+
+  const startCoords = cm.charCoords(fromPos, 'local');
+  const endCoords = cm.charCoords(toPos, 'local');
+  const editorEl = cm.getScrollerElement();
+
+  // Vertical-only centering, computed and applied directly — no reliance
+  // on CodeMirror scrolling/selection/focus behavior.
+  const matchCenterY = (startCoords.top + endCoords.bottom) / 2;
+  editorEl.scrollTop = Math.max(0, matchCenterY - editorEl.clientHeight / 2);
+
+  // Draw our own highlight box positioned over the match, independent of
+  // cm.setSelection() and independent of editor focus state.
+  dvClearSearchHighlight();
+  const highlightEl = dvGetOrCreateHighlightEl(cm);
+  highlightEl.style.left = startCoords.left + 'px';
+  highlightEl.style.top = startCoords.top + 'px';
+  highlightEl.style.width = Math.max(6, endCoords.right - startCoords.left) + 'px';
+  highlightEl.style.height = (endCoords.bottom - startCoords.top) + 'px';
+  highlightEl.classList.add('dv-search-highlight-show');
+  dvSearchHighlightEl = highlightEl;
+
+  // Fade the highlight out on its own after a moment; it never depends on
+  // focus or selection state to stay visible or to disappear.
+  clearTimeout(dvHighlightAndCenter._t);
+  dvHighlightAndCenter._t = setTimeout(() => {
+    if (highlightEl) highlightEl.classList.remove('dv-search-highlight-show');
+  }, 2200);
+}
+
+function dvEscapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function dvRunSearch() {
   const term = document.getElementById('dv-modal-search-input').value;
   if (!term) { dvToast('Enter a search term'); return; }
   const cm = dvActiveEditor();
-  const cursor = cm.getSearchCursor(term, cm.getCursor());
-  if (cursor.findNext()) {
-    dvCenterMatchInView(cm, cursor.from(), cursor.to());
-    dvToast('Match found');
-  } else {
-    const cursor2 = cm.getSearchCursor(term, { line: 0, ch: 0 });
-    if (cursor2.findNext()) {
-      dvCenterMatchInView(cm, cursor2.from(), cursor2.to());
-      dvToast('Match found (wrapped)');
-    } else {
-      dvToast('No matches found');
-    }
-  }
+  const text = cm.getValue();
+  const cursorPos = cm.getCursor();
+  const cursorIndex = cm.indexFromPos(cursorPos);
+
+  const match = dvFindMatch(text, term, cursorIndex + 1);
+
+  // Close the modal and let the editor screen fully settle FIRST. Running
+  // the highlight/scroll while the modal is still mid-transition is what
+  // caused "found" to report true with nothing visible before.
   dvHideModal('dv-modal-search');
+
+  if (!match) {
+    dvToast('No matches found');
+    return;
+  }
+
+  const fromLC = dvIndexToLineCh(text, match.index);
+  const toLC = dvIndexToLineCh(text, match.index + match.length);
+  const fromPos = { line: fromLC.line, ch: fromLC.ch };
+  const toPos = { line: toLC.line, ch: toLC.ch };
+
+  setTimeout(() => dvHighlightAndCenter(cm, fromPos, toPos), 220);
+  dvToast(match.wrapped ? 'Match found (wrapped)' : 'Match found');
 }
 
 /* ===================== SAVE MODAL ===================== */
