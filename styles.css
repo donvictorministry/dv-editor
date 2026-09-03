@@ -164,6 +164,20 @@ p{margin:0;}
   line-height:1.5;
 }
 
+/* DV independent search highlight — drawn and positioned by our own JS,
+   fully independent of CodeMirror's selection/focus state. */
+.dv-search-highlight{
+  position:absolute;
+  pointer-events:none;
+  background:rgba(255,214,0,0.55);
+  border-radius:3px;
+  opacity:0;
+  transition:opacity 0.15s ease;
+  z-index:5;
+}
+.dv-search-highlight-show{opacity:1;}
+[data-dv-theme="dark"] .dv-search-highlight{background:rgba(255,214,0,0.4);}
+
 /* ===================== PREVIEW ===================== */
 .dv-preview-close{
   position:absolute;top:calc(10px + var(--dv-safe-top));right:10px;z-index:2;
