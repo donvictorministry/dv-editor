@@ -245,23 +245,32 @@ function dvOpenSearchModal() {
   setTimeout(() => input.focus(), 100);
 }
 
+function dvCenterMatchInView(cm, from, to) {
+  cm.setSelection(from, to);
+  // Vertical-only centering. Horizontal scroll position is left untouched
+  // so the start of each line always stays visible.
+  requestAnimationFrame(() => {
+    const startCoords = cm.charCoords(from, 'local');
+    const endCoords = cm.charCoords(to, 'local');
+    const editorEl = cm.getScrollerElement();
+    const matchCenterY = (startCoords.top + endCoords.bottom) / 2;
+
+    editorEl.scrollTop = Math.max(0, matchCenterY - editorEl.clientHeight / 2);
+  });
+}
+
 function dvRunSearch() {
   const term = document.getElementById('dv-modal-search-input').value;
   if (!term) { dvToast('Enter a search term'); return; }
   const cm = dvActiveEditor();
   const cursor = cm.getSearchCursor(term, cm.getCursor());
   if (cursor.findNext()) {
-    cm.setSelection(cursor.from(), cursor.to());
-    cm.scrollIntoView({ from: cursor.from(), to: cursor.to() }, 100);
-    const coords = cm.charCoords(cursor.from(), 'local');
-    const editorEl = cm.getScrollerElement();
-    editorEl.scrollTop = Math.max(0, coords.top - editorEl.clientHeight / 2);
+    dvCenterMatchInView(cm, cursor.from(), cursor.to());
     dvToast('Match found');
   } else {
     const cursor2 = cm.getSearchCursor(term, { line: 0, ch: 0 });
     if (cursor2.findNext()) {
-      cm.setSelection(cursor2.from(), cursor2.to());
-      cm.scrollIntoView({ from: cursor2.from(), to: cursor2.to() }, 100);
+      dvCenterMatchInView(cm, cursor2.from(), cursor2.to());
       dvToast('Match found (wrapped)');
     } else {
       dvToast('No matches found');
@@ -719,6 +728,32 @@ function dvBindEvents() {
   dvBindToolsbar();
 }
 
+/* ===================== SEED PROJECT (3-FILE TEST) ===================== */
+function dvWallpaperHTML() {
+  return '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>DV Wallpaper</title>\n</head>\n<body>\n  <div class="dv-wp-stage">\n    <div class="dv-wp-orb dv-wp-orb-1"></div>\n    <div class="dv-wp-orb dv-wp-orb-2"></div>\n    <div class="dv-wp-orb dv-wp-orb-3"></div>\n    <h1 class="dv-wp-label">DV-Editor</h1>\n  </div>\n</body>\n</html>';
+}
+function dvWallpaperCSS() {
+  return 'html, body {\n  margin: 0;\n  width: 100%;\n  height: 100%;\n  overflow: hidden;\n  background: #0E0F11;\n}\n\n.dv-wp-stage {\n  position: relative;\n  width: 100vw;\n  height: 100vh;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  background: linear-gradient(160deg, #0E0F11 0%, #101425 60%, #1877F2 140%);\n  overflow: hidden;\n}\n\n.dv-wp-orb {\n  position: absolute;\n  border-radius: 50%;\n  filter: blur(40px);\n  opacity: 0.55;\n}\n\n.dv-wp-orb-1 {\n  width: 60vw;\n  height: 60vw;\n  background: #1877F2;\n  top: -15vw;\n  left: -10vw;\n}\n\n.dv-wp-orb-2 {\n  width: 45vw;\n  height: 45vw;\n  background: #8B5CF6;\n  bottom: -10vw;\n  right: -10vw;\n}\n\n.dv-wp-orb-3 {\n  width: 30vw;\n  height: 30vw;\n  background: #14B8A6;\n  bottom: 20vh;\n  left: 10vw;\n}\n\n.dv-wp-label {\n  position: relative;\n  z-index: 2;\n  color: #FFFFFF;\n  font-family: sans-serif;\n  font-weight: 700;\n  font-size: 8vw;\n  letter-spacing: 0.05em;\n  text-shadow: 0 4px 24px rgba(0,0,0,0.4);\n}';
+}
+function dvWallpaperJS() {
+  return '// Gently drifts the orbs to prove HTML + CSS + JS are linked live\nconst dvOrbs = document.querySelectorAll(".dv-wp-orb");\nlet dvT = 0;\n\nfunction dvAnimateWallpaper() {\n  dvT += 0.01;\n  dvOrbs.forEach((orb, i) => {\n    const dx = Math.sin(dvT + i * 2) * 18;\n    const dy = Math.cos(dvT + i * 2) * 18;\n    orb.style.transform = "translate(" + dx + "px, " + dy + "px)";\n  });\n  requestAnimationFrame(dvAnimateWallpaper);\n}\n\ndvAnimateWallpaper();';
+}
+
+async function dvSeedWallpaperIfEmpty() {
+  const existing = await dvGetAllFiles();
+  if (existing.length > 0) return;
+
+  const record = {
+    id: 'dv_seed_wallpaper',
+    name: 'DV Wallpaper (Test Project)',
+    html: dvWallpaperHTML(),
+    css: dvWallpaperCSS(),
+    js: dvWallpaperJS(),
+    updatedAt: Date.now()
+  };
+  await dvSaveFileRecord(record);
+}
+
 /* ===================== INIT ===================== */
 async function dvInit() {
   try {
@@ -731,7 +766,10 @@ async function dvInit() {
   dvRestoreSettings();
   dvBindEvents();
   dvRegisterSW();
-  if (DV.db) await dvRenderFileList();
+  if (DV.db) {
+    await dvSeedWallpaperIfEmpty();
+    await dvRenderFileList();
+  }
 
   // Reflect initial toggle-button states
   document.querySelectorAll('.dv-tool-toggle').forEach(btn => {
