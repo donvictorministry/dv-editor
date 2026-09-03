@@ -121,6 +121,10 @@ function dvInitEditors() {
   DV.editors.css.setValue(dvDefaultCSS());
   DV.editors.js.setValue(dvDefaultJS());
   dvApplyCMTheme();
+
+  Object.values(DV.editors).forEach(cm => {
+    cm.on('change', () => dvClearSearchHighlight());
+  });
 }
 
 function dvDefaultHTML() {
@@ -147,6 +151,7 @@ function dvActiveEditor() {
 
 /* ===================== TAB SWITCHING ===================== */
 function dvSwitchTab(tab) {
+  dvClearSearchHighlight();
   DV.activeTab = tab;
   document.querySelectorAll('.dv-tab').forEach(t => {
     t.classList.toggle('dv-tab-active', t.dataset.tab === tab);
@@ -241,8 +246,8 @@ function dvCopyToClipboard(cm) {
 function dvOpenSearchModal() {
   dvShowModal('dv-modal-search');
   const input = document.getElementById('dv-modal-search-input');
-  input.value = '';
-  setTimeout(() => input.focus(), 100);
+  // Persist the last searched term for this session — do not clear it.
+  setTimeout(() => { input.focus(); input.select(); }, 100);
 }
 
 /* ===================== DV INDEPENDENT SEARCH HIGHLIGHT ===================== */
@@ -255,12 +260,17 @@ function dvOpenSearchModal() {
 let dvSearchHighlightEl = null;
 
 function dvGetOrCreateHighlightEl(cm) {
-  const wrapper = cm.getWrapperElement();
-  let el = wrapper.querySelector('.dv-search-highlight');
+  // 'local' coordinates from charCoords() are relative to the scroller's
+  // inner content node (.CodeMirror-lines), NOT the outer wrapper. That
+  // mismatch — appending to getWrapperElement() — is why the highlight
+  // was being positioned outside the visible area and never seen.
+  const linesEl = cm.getScrollerElement().querySelector('.CodeMirror-lines');
+  const container = linesEl || cm.getScrollerElement();
+  let el = container.querySelector('.dv-search-highlight');
   if (!el) {
     el = document.createElement('div');
     el.className = 'dv-search-highlight';
-    wrapper.appendChild(el);
+    container.appendChild(el);
   }
   return el;
 }
@@ -316,13 +326,9 @@ function dvHighlightAndCenter(cm, fromPos, toPos) {
   highlightEl.style.height = (endCoords.bottom - startCoords.top) + 'px';
   highlightEl.classList.add('dv-search-highlight-show');
   dvSearchHighlightEl = highlightEl;
-
-  // Fade the highlight out on its own after a moment; it never depends on
-  // focus or selection state to stay visible or to disappear.
-  clearTimeout(dvHighlightAndCenter._t);
-  dvHighlightAndCenter._t = setTimeout(() => {
-    if (highlightEl) highlightEl.classList.remove('dv-search-highlight-show');
-  }, 2200);
+  // Persists until manually dismissed — no auto-fade timer. It is cleared
+  // by dvClearSearchHighlight(), called when the user runs a new search,
+  // edits the text, switches tabs, or leaves the editor.
 }
 
 function dvEscapeRegExp(str) {
@@ -464,6 +470,7 @@ function dvOpenEditor(fileRecord) {
 }
 
 function dvCloseEditor() {
+  dvClearSearchHighlight();
   document.getElementById('dv-editor-modal').classList.remove('dv-screen-active');
 }
 
