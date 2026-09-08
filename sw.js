@@ -1,5 +1,5 @@
 /* ===================== DV-EDITOR SERVICE WORKER ===================== */
-const DV_CACHE_NAME = 'dv-editor-cache-v1';
+const DV_CACHE_NAME = 'dv-editor-cache-v1.1';
 
 const DV_APP_SHELL = [
   './',
